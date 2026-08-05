@@ -3,12 +3,21 @@
 #
 CONFIG_IDF_TARGET="esp32p4"
 
-# The JC1060P470C carries an ESP32-P4 revision v1.0. ESP-IDF v6 defaults to
-# requiring rev v3.1+, and P4 silicon >=v3.0 is NOT compatible with 0.x/1.x, so
-# the "revisions <3.0" family has to be selected explicitly or the bootloader
-# refuses to flash ("requires chip revision in range [v3.1 - v3.99]").
-CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
-CONFIG_ESP32P4_REV_MIN_100=y
+# ESP32-P4 silicon revision. P4 revisions >=v3.0 and <3.0 have large hardware
+# differences and are NOT binary compatible, so this picks one family and a
+# build only runs on boards from that family.
+#
+# Set for rev v3.x boards (verified on a JC1060P470C with rev v3.2).
+# REV_MIN_301 covers v3.1-v3.99 and is the ESP-IDF v6 default; use
+# CONFIG_ESP32P4_REV_MIN_300 instead if a board turns up with rev v3.0 (that
+# also pulls in the REV3 MSPI workaround, fixed since v3.1).
+#
+# For an older rev v0.x/v1.x board, replace the line below with:
+#   CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+#   CONFIG_ESP32P4_REV_MIN_100=y
+# Otherwise esptool refuses to flash: "requires chip revision in range
+# [v3.1 - v3.99] (this chip is revision v1.0)".
+CONFIG_ESP32P4_REV_MIN_301=y
 
 # JC1060P470C display: 1024x600 JD9165 MIPI-DSI panel, RGB565.
 # These match the BSP defaults but are pinned here so the build is reproducible.
