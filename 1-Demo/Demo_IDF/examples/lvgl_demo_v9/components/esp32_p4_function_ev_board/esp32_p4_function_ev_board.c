@@ -23,6 +23,9 @@
 #if CONFIG_BSP_LCD_TYPE_1024_600
 /* JC1060P470C carries a JD9165 1024x600 panel, not the devkit's EK79007 */
 #include "esp_lcd_jd9165.h"
+#elif CONFIG_BSP_LCD_TYPE_800_1280_JD9365
+/* JC1060P470C 10.1-inch option: JD9365 800x1280 */
+#include "esp_lcd_jd9365.h"
 #elif CONFIG_BSP_LCD_TYPE_HDMI
 #include "esp_lcd_lt8912b.h"
 #else
@@ -102,9 +105,12 @@ static const jd9165_lcd_init_cmd_t jc1060p470c_jd9165_init_cmds[] = {
 };
 
 /*
- * The GT911 on this board reports coordinates in the 800x480 space of the
+ * The GT911 on the 7-inch board reports coordinates in the 800x480 space of the
  * devkit panel, so they are rescaled to the 1024x600 JD9165 here. Done through
  * esp_lcd_touch_config_t::process_coordinates to keep esp_lcd_touch_gt911 stock.
+ *
+ * This rescale is specific to the 7-inch panel -- do not apply it to other panels
+ * without measuring their touch controller first.
  */
 #define BSP_TOUCH_NATIVE_H_RES  (800)
 #define BSP_TOUCH_NATIVE_V_RES  (480)
@@ -122,6 +128,21 @@ static void bsp_touch_scale_coordinates(esp_lcd_touch_handle_t tp, uint16_t *x, 
     }
 }
 #endif // CONFIG_BSP_LCD_TYPE_1024_600
+
+#if CONFIG_BSP_LCD_TYPE_800_1280_JD9365
+/*
+ * JC1060P470C 10.1-inch panel. It is OTP-programmed: per the panel vendor the
+ * whole init sequence is already burned into the display, and the host must send
+ * only sleep-out and display-on. esp_lcd_jd9365 sends both of these from this
+ * table rather than separately, so the table is deliberately just those two.
+ *
+ * This panel is also display-only -- see BSP_LCD_HAS_TOUCH in bsp/touch.h.
+ */
+static const jd9365_lcd_init_cmd_t jc1060p470c_jd9365_otp_init_cmds[] = {
+    {0x11, (uint8_t[]){0x00}, 1, 120},  // sleep out
+    {0x29, (uint8_t[]){0x00}, 1, 50},   // display on
+};
+#endif // CONFIG_BSP_LCD_TYPE_800_1280_JD9365
 
 #if (BSP_CONFIG_NO_GRAPHIC_LIB == 0)
 static lv_indev_t *disp_indev = NULL;
@@ -728,6 +749,65 @@ esp_err_t bsp_display_new_with_handles(const bsp_display_config_t *config, bsp_l
 
     ESP_GOTO_ON_ERROR(esp_lcd_panel_reset(disp_panel), err, TAG, "LCD panel reset failed");
     ESP_GOTO_ON_ERROR(esp_lcd_panel_init(disp_panel), err, TAG, "LCD panel init failed");
+#elif CONFIG_BSP_LCD_TYPE_800_1280_JD9365
+    // create JD9365 control panel (JC1060P470C 10.1-inch, 800x1280 portrait)
+    ESP_LOGI(TAG, "Install JD9365 LCD control panel");
+
+    esp_lcd_dpi_panel_config_t dpi_config = JD9365_800_1280_PANEL_60HZ_DPI_CONFIG_CF(LCD_COLOR_FMT_RGB565);
+
+    /* The panel expects RGB888 on the wire, but the frame buffer stays RGB565:
+     * the DSI bridge converts between the two, which halves frame buffer size and
+     * keeps LVGL on LV_COLOR_DEPTH=16 like the 7-inch build. */
+    dpi_config.out_color_format = LCD_COLOR_FMT_RGB888;
+
+    /* Timings for this panel. The pixel clock is what the panel vendor specified
+     * (60MHz, so ~50Hz refresh at 900x1328 total); HBP/VBP/VFP come from the OTP
+     * register dump. All of these differ from the stock JD9365 macro, which uses
+     * 80MHz with HBP 20 / VBP 12 / VFP 30. */
+    dpi_config.dpi_clock_freq_mhz             = 60;
+    dpi_config.video_timing.hsync_back_porch  = 40;
+    dpi_config.video_timing.hsync_pulse_width = 20;
+    dpi_config.video_timing.hsync_front_porch = 40;
+    dpi_config.video_timing.vsync_back_porch  = 24;
+    dpi_config.video_timing.vsync_pulse_width = 4;
+    dpi_config.video_timing.vsync_front_porch = 20;
+
+    dpi_config.num_fbs = CONFIG_BSP_LCD_DPI_BUFFER_NUMS;
+
+#if CONFIG_BSP_LCD_USE_DMA2D && (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(6, 0, 0))
+    dpi_config.flags.use_dma2d = true;
+#endif
+
+    jd9365_vendor_config_t vendor_config = {
+        /* The panel is OTP-programmed: its init sequence is burned in, and the
+         * vendor says the host must send only sleep-out and display-on. Leaving
+         * init_cmds NULL would make esp_lcd_jd9365 fall back to its full
+         * vendor_specific_init_default and fight the burned-in configuration. */
+        .init_cmds = jc1060p470c_jd9365_otp_init_cmds,
+        .init_cmds_size = sizeof(jc1060p470c_jd9365_otp_init_cmds) / sizeof(jd9365_lcd_init_cmd_t),
+        .mipi_config = {
+            .dsi_bus = mipi_dsi_bus,
+            .dpi_config = &dpi_config,
+            .lane_num = BSP_LCD_MIPI_DSI_LANE_NUM,
+        },
+    };
+    esp_lcd_panel_dev_config_t lcd_dev_config = {
+        /* Drives the COLMOD (0x3A) value the driver sends: 24bpp -> 0x77, matching
+         * the RGB888 the panel receives. */
+        .bits_per_pixel = 24,
+        .rgb_ele_order = BSP_LCD_COLOR_SPACE,
+        .reset_gpio_num = BSP_LCD_RST,
+        .vendor_config = &vendor_config,
+    };
+    ESP_GOTO_ON_ERROR(esp_lcd_new_panel_jd9365(io, &lcd_dev_config, &disp_panel), err, TAG,
+                      "New LCD panel JD9365 failed");
+
+#if CONFIG_BSP_LCD_USE_DMA2D && (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0))
+    ESP_GOTO_ON_ERROR(esp_lcd_dpi_panel_enable_dma2d(disp_panel), err, TAG, "LCD panel enable DMA2D failed");
+#endif
+
+    ESP_GOTO_ON_ERROR(esp_lcd_panel_reset(disp_panel), err, TAG, "LCD panel reset failed");
+    ESP_GOTO_ON_ERROR(esp_lcd_panel_init(disp_panel), err, TAG, "LCD panel init failed");
 #elif CONFIG_BSP_LCD_TYPE_1280_800
     // create ILI9881C control panel
     ESP_LOGI(TAG, "Install ILI9881C LCD control panel");
@@ -927,7 +1007,7 @@ void bsp_display_delete(void)
     bsp_display_brightness_deinit();
 }
 
-#if !CONFIG_BSP_LCD_TYPE_HDMI
+#if BSP_LCD_HAS_TOUCH
 esp_err_t bsp_touch_new(const bsp_touch_config_t *config, esp_lcd_touch_handle_t *ret_touch)
 {
     /* Initilize I2C */
@@ -968,7 +1048,7 @@ void bsp_touch_delete(void)
         tp_io_handle = NULL;
     }
 }
-#endif //!CONFIG_BSP_LCD_TYPE_HDMI
+#endif //BSP_LCD_HAS_TOUCH
 
 #if (BSP_CONFIG_NO_GRAPHIC_LIB == 0)
 static lv_display_t *bsp_display_lcd_init(const bsp_display_cfg_t *cfg)
@@ -1067,7 +1147,7 @@ static lv_display_t *bsp_display_lcd_init(const bsp_display_cfg_t *cfg)
     return lvgl_port_add_disp_dsi(&disp_cfg, &dpi_cfg);
 }
 
-#if !CONFIG_BSP_LCD_TYPE_HDMI
+#if BSP_LCD_HAS_TOUCH
 static lv_indev_t *bsp_display_indev_init(lv_display_t *disp)
 {
     BSP_ERROR_CHECK_RETURN_NULL(bsp_touch_new(NULL, &tp));
@@ -1081,7 +1161,7 @@ static lv_indev_t *bsp_display_indev_init(lv_display_t *disp)
 
     return lvgl_port_add_touch(&touch_cfg);
 }
-#endif //!CONFIG_BSP_LCD_TYPE_HDMI
+#endif //BSP_LCD_HAS_TOUCH
 
 lv_display_t *bsp_display_start(void)
 {
@@ -1131,7 +1211,7 @@ lv_display_t *bsp_display_start_with_config(const bsp_display_cfg_t *cfg)
     BSP_ERROR_CHECK_RETURN_NULL(bsp_display_brightness_init());
 
     BSP_NULL_CHECK(disp = bsp_display_lcd_init(cfg), NULL);
-#if !CONFIG_BSP_LCD_TYPE_HDMI
+#if BSP_LCD_HAS_TOUCH
     BSP_NULL_CHECK(disp_indev = bsp_display_indev_init(disp), NULL);
 #endif
     return disp;
@@ -1140,13 +1220,13 @@ lv_display_t *bsp_display_start_with_config(const bsp_display_cfg_t *cfg)
 void bsp_display_stop(lv_display_t *display)
 {
     /* Deinit LVGL */
-#if !CONFIG_BSP_LCD_TYPE_HDMI
+#if BSP_LCD_HAS_TOUCH
     lvgl_port_remove_touch(disp_indev);
 #endif
     lvgl_port_remove_disp(display);
     lvgl_port_deinit();
 
-#if !CONFIG_BSP_LCD_TYPE_HDMI
+#if BSP_LCD_HAS_TOUCH
     /* Deinit touch */
     bsp_touch_delete();
 #endif

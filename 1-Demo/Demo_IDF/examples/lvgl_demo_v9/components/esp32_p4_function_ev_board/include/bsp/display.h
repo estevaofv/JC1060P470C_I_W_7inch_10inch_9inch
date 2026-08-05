@@ -45,6 +45,10 @@
 /* LCD display definition 1024x600 */
 #define BSP_LCD_H_RES              (1024)
 #define BSP_LCD_V_RES              (600)
+#elif CONFIG_BSP_LCD_TYPE_800_1280_JD9365
+/* LCD display definition 800x1280 (10.1-inch JD9365, portrait native) */
+#define BSP_LCD_H_RES              (800)
+#define BSP_LCD_V_RES              (1280)
 #else
 /* LCD display definition 1280x800 */
 #define BSP_LCD_H_RES              (800)
@@ -55,6 +59,10 @@
 #if CONFIG_BSP_LCD_TYPE_1024_600
 /* JC1060P470C: JD9165 1024x600 panel runs the DSI lanes at 550Mbps (devkit/EK79007 uses 1Gbps) */
 #define BSP_LCD_MIPI_DSI_LANE_BITRATE_MBPS (550)
+#elif CONFIG_BSP_LCD_TYPE_800_1280_JD9365
+/* JC1060P470C 10.1-inch: 60MHz pixel clock x 24bpp on the wire / 2 lanes = 720Mbps
+ * minimum, so 1Gbps leaves headroom. */
+#define BSP_LCD_MIPI_DSI_LANE_BITRATE_MBPS (1000)
 #else
 #define BSP_LCD_MIPI_DSI_LANE_BITRATE_MBPS (1000) // 1Gbps
 #endif

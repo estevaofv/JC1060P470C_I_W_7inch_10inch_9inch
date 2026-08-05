@@ -17,6 +17,19 @@
 #pragma once
 #include "esp_lcd_touch.h"
 
+/**
+ * @brief Whether the selected display has a touch controller.
+ *
+ * The JC1060P470C 10.1-inch panel is display-only, and HDMI output has no touch
+ * either. Without this guard bsp_display_start() would call bsp_touch_new(),
+ * fail to find a GT911 and abort on its assert, leaving the board in a boot loop.
+ */
+#if CONFIG_BSP_LCD_TYPE_HDMI || CONFIG_BSP_LCD_TYPE_800_1280_JD9365
+#define BSP_LCD_HAS_TOUCH   (0)
+#else
+#define BSP_LCD_HAS_TOUCH   (1)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

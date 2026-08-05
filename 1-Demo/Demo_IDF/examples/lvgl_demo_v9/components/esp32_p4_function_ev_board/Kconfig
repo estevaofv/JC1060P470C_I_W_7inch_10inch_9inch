@@ -135,6 +135,8 @@ menu "Board Support Package (ESP32-P4)"
 
             config BSP_LCD_TYPE_1024_600
                 bool "LCD 7-inch 1024x600 - jd9165 (JC1060P470C)"
+            config BSP_LCD_TYPE_800_1280_JD9365
+                bool "LCD 10.1-inch 800x1280 - jd9365 (JC1060P470C)"
             config BSP_LCD_TYPE_1280_800
                 bool "LCD 1280x800 - ili9881c"
             config BSP_LCD_TYPE_HDMI

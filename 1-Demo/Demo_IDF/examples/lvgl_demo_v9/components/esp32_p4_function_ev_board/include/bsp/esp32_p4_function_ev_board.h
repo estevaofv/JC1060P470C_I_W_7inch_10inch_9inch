@@ -98,6 +98,15 @@
  * Confirmed by both examples/readme/readme.txt and esp-display-panel.yaml. */
 #define BSP_LCD_TOUCH_RST     (GPIO_NUM_22)
 #define BSP_LCD_TOUCH_INT     (GPIO_NUM_21)
+#elif CONFIG_BSP_LCD_TYPE_800_1280_JD9365
+/* JC1060P470C 10.1-inch. The flat cable is pin-compatible with the 7-inch one,
+ * so backlight and panel reset sit on the same lines. Without this branch the
+ * panel would fall through to the devkit defaults below and end up with no reset
+ * line at all. This panel carries no touch controller. */
+#define BSP_LCD_BACKLIGHT     (GPIO_NUM_23)
+#define BSP_LCD_RST           (GPIO_NUM_27)
+#define BSP_LCD_TOUCH_RST     (GPIO_NUM_NC)
+#define BSP_LCD_TOUCH_INT     (GPIO_NUM_NC)
 #else
 #define BSP_LCD_BACKLIGHT     (GPIO_NUM_23)
 #define BSP_LCD_RST           (GPIO_NUM_NC)
