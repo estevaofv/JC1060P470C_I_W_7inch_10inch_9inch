@@ -1,6 +1,9 @@
-# Name,   Type, SubType, Offset,  Size, Flags
-# Note: if you change the phy_init or app partition offset, make sure to change the offset in Kconfig.projbuild
-nvs,      data, nvs,     0x9000,  0x6000,
-phy_init, data, phy,     0xf000,  0x1000,
-factory,  app,  factory, ,        8M,
-storage,  data, spiffs,  ,        7M,
+# Name,   Type, SubType, Offset,   Size, Flags
+# The ESP-IDF v6 bootloader is larger than v5's (0x6100 bytes), so the partition
+# table had to move from 0x8000 to 0xA000 (see CONFIG_PARTITION_TABLE_OFFSET in
+# sdkconfig.defaults). Everything below shifted accordingly; the app partition
+# must stay aligned to 0x10000.
+nvs,      data, nvs,     0xB000,   0x6000,
+phy_init, data, phy,     0x11000,  0x1000,
+factory,  app,  factory, 0x20000,  8M,
+storage,  data, spiffs,  ,         7M,

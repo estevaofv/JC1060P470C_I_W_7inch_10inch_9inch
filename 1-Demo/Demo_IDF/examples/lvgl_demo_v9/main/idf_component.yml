@@ -1,6 +1,11 @@
 ## IDF Component Manager Manifest File
+##
+## The ESP32-P4 BSP is NOT taken from the registry: components/esp32_p4_function_ev_board
+## is a local fork of espressif/esp32_p4_function_ev_board 5.2.3 carrying the
+## JC1060P470C board deltas (JD9165 panel, pin remap, DSI lane rate, touch scaling).
+## It declares its own dependencies in components/esp32_p4_function_ev_board/idf_component.yml.
 dependencies:
-  espressif/esp_lcd_jd9165: "^1.0.1"
+  idf: ">=6.0"
   lvgl/lvgl:
-    version: "9.2.*"
+    version: "^9.5"
     public: true
